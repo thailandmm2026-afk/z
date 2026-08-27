@@ -18,7 +18,7 @@ from bs4 import BeautifulSoup
 from flask import Flask
 from threading import Thread
 
-ADMIN_ID = 8433047541
+ADMIN_ID = 7308292609
 BOT_TOKEN = "8707027344:AAFOGuDVUpKgGaCmOruhyh1Z5plgeclsa00"
 DEVELOPER_CONTACT = "@kiki20251"
 
