@@ -1,6 +1,6 @@
-Cloudscraper==1.2.71
-beautifulsoup4==4.12.2
-python-telegram-bot==20.6
-requests==2.31.0
-lxml==4.9.3
-Flask==3.0.0
+python-telegram-bot==21.6
+cloudscraper==1.2.71
+beautifulsoup4==4.12.3
+flask==3.0.3
+lxml==5.3.0
+requests==2.32.3
