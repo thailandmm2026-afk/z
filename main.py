@@ -19,7 +19,7 @@ from flask import Flask
 from threading import Thread
 
 ADMIN_ID = 7308292609
-BOT_TOKEN = "8707027344:AAFOGuDVUpKgGaCmOruhyh1Z5plgeclsa00"
+BOT_TOKEN = "8707027344:AAFlHX4yY7-6fXXaeimh8DrmxldaJFbfknc"
 DEVELOPER_CONTACT = "@kiki20251"
 
 # Colors
@@ -460,22 +460,16 @@ def is_authorized(user_id):
 def is_admin(user_id):
     return user_id == bot_instance.config.get("admin_id")
 
-# ==================== KEYBOARDS ====================
+# ==================== KEYBOARDS (Full Width) ====================
 
 def main_menu_keyboard(is_admin_user=False):
     keyboard = [
-        [
-            InlineKeyboardButton("🛒 Market", callback_data="menu_market"),
-            InlineKeyboardButton("💵 Balance", callback_data="menu_balance")
-        ],
-        [
-            InlineKeyboardButton("💎 Topup", callback_data="menu_topup"),
-            InlineKeyboardButton("📋 Logs", callback_data="menu_logs")
-        ],
-        [
-            InlineKeyboardButton("👤 Status", callback_data="menu_status"),
-            InlineKeyboardButton("ℹ️ Help", callback_data="menu_help")
-        ]
+        [InlineKeyboardButton("🛒 Market", callback_data="menu_market")],
+        [InlineKeyboardButton("💵 Balance", callback_data="menu_balance")],
+        [InlineKeyboardButton("💎 Topup", callback_data="menu_topup")],
+        [InlineKeyboardButton("📋 Logs", callback_data="menu_logs")],
+        [InlineKeyboardButton("👤 Status", callback_data="menu_status")],
+        [InlineKeyboardButton("ℹ️ Help", callback_data="menu_help")],
     ]
     if is_admin_user:
         keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="menu_admin")])
@@ -525,19 +519,13 @@ def qty_keyboard(prod_index):
 
 def admin_keyboard():
     keyboard = [
-        [
-            InlineKeyboardButton("🍪 Set Cookie", callback_data="admin_cookie"),
-            InlineKeyboardButton("🔄 Refresh Market", callback_data="admin_refresh")
-        ],
-        [
-            InlineKeyboardButton("💱 Set Rate", callback_data="admin_setrate"),
-            InlineKeyboardButton("📈 Set Markup", callback_data="admin_setmarkup")
-        ],
-        [
-            InlineKeyboardButton("💵 Add Coin to User", callback_data="admin_addcoin"),
-            InlineKeyboardButton("👥 Manage Users", callback_data="admin_users")
-        ],
-        [InlineKeyboardButton("🔙 Main Menu", callback_data="menu_main")]
+        [InlineKeyboardButton("🍪 Set Cookie", callback_data="admin_cookie")],
+        [InlineKeyboardButton("🔄 Refresh Market", callback_data="admin_refresh")],
+        [InlineKeyboardButton("💱 Set Rate", callback_data="admin_setrate")],
+        [InlineKeyboardButton("📈 Set Markup", callback_data="admin_setmarkup")],
+        [InlineKeyboardButton("💵 Add Coin to User", callback_data="admin_addcoin")],
+        [InlineKeyboardButton("👥 Manage Users", callback_data="admin_users")],
+        [InlineKeyboardButton("🔙 Main Menu", callback_data="menu_main")],
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -931,7 +919,7 @@ def keep_alive():
 def main():
     config = load_config()
     print(f"{V}╔════════════════════════════════════════════╗")
-    print(f"{V}║{W}{B}   SMILE.ONE BOT V3.9 - BUTTONS + COIN  {V}║")
+    print(f"{V}║{W}{B}   SMILE.ONE BOT V3.9 - FULL WIDTH BTN  {V}║")
     print(f"{V}╚════════════════════════════════════════════╝{N}")
 
     app = Application.builder().token(BOT_TOKEN).build()
@@ -940,10 +928,10 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("cancel", cancel_command))
     app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+    app.add_handler(MessageHandler(filters.TEXT & \~filters.COMMAND, text_handler))
     app.add_error_handler(error_handler)
 
-    print(f"{G}[+] Bot started with Buttons + Coin System!{N}")
+    print(f"{G}[+] Bot started with Full-Width Buttons + Coin System!{N}")
     keep_alive()
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
