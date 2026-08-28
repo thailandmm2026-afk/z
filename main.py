@@ -8,118 +8,76 @@ import sys
 import asyncio
 import html
 from datetime import datetime, timedelta
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import (
+    Application, CommandHandler, CallbackQueryHandler, MessageHandler,
+    filters, ContextTypes, ConversationHandler
+)
 from bs4 import BeautifulSoup
 from flask import Flask
 from threading import Thread
 
+ADMIN_ID = 7308292609
+BOT_TOKEN = "7572191890:AAGWDg9jjKqYux0J4Se4jTu1wiH5t7aJTgE"
+DEVELOPER_CONTACT = "@kiki20251"
 
-
-ADMIN_ID = 7308292609  
-BOT_TOKEN = "8707027344:AAFlHX4yY7-6fXXaeimh8DrmxldaJFbfknc"  # 
-DEVELOPER_CONTACT = "@kiki20251"  
-# Premium Color Palette for Terminal (admin only)
-G = '\033[38;5;46m'    # Success Green
-R = '\033[38;5;196m'   # Critical Red
-Y = '\033[38;5;226m'   # Warning Yellow
-C = '\033[38;5;51m'    # Cyber Cyan
-V = '\033[38;5;93m'    # Cyber Violet
-W = '\033[38;5;255m'   # Bright White
-B = '\033[1m'          # Bold
-D = '\033[38;5;242m'   # Dimmed Gray
-N = '\033[0m'          # Reset
+# Colors
+G = '\033[38;5;46m'
+R = '\033[38;5;196m'
+Y = '\033[38;5;226m'
+C = '\033[38;5;51m'
+V = '\033[38;5;93m'
+W = '\033[38;5;255m'
+B = '\033[1m'
+D = '\033[38;5;242m'
+N = '\033[0m'
 
 COOKIE_FILE = 'cookies.json'
 CONFIG_FILE = 'config.json'
+USERS_FILE = 'users.json'
+PRICES_FILE = 'prices.json'
 
-# Default configuration
 DEFAULT_CONFIG = {
     "mmk_exchange_rate": 85,
     "admin_id": ADMIN_ID,
     "developer_contact": DEVELOPER_CONTACT,
     "bot_name": "SmileOne Topup Bot",
-    "max_quantity": 100,
-    "min_quantity": 1
+    "max_quantity": 50,
+    "min_quantity": 1,
+    "default_markup": 1.15
 }
 
-# ============================================
-# Premium Emoji Dictionary & Helpers
-# ============================================
+# Conversation states
+WAITING_UID_ZID, WAITING_QTY = range(2)
+
 EMOJI_IDS = {
-    "check": "5206607081334906820",      
-    "cross": "5210952531676504517",      
-    "warning": "5447644880824181073",    
-    "info": "5323442290708985472",       
-    "play": "5348125953090403204",       
-    "refresh": "5375338737028841420",    
-    "search": "5300885126765355672",     
-    "copy": "5323334860692015303",       
-    "chat": "5443038326535759644",       
-    "mail": "5253742260054409879",       
-    "call": "5307746710682869587",       
-    "chatgpt": "5287684458881756303",    
-    "dollar": "5409048419211682843",     
-    "chart": "5451882707875276247",      
-    "stats": "5231200819986047254",      
-    "calendar": "5413879192267805083",   
-    "hourglass": "6113761177056057411",  
-    "lock": "5296369303661067030",       
-    "user": "5890864241388293875",       
-    "users": "5942877472163892475",      
-    "star": "5438496463044752972",       
-    "trophy": "5415655814079723871",     
-    "tag": "5985433648810171091",        
-    "ban": "5260293700088511294",        
-    "database": "5877485980901971030",   
-    "wifi": "5447410659077661506",
-    "gift": "5449800250032143374",
-    "market": "5440841102871517055",
+    "check": "5206607081334906820", "cross": "5210952531676504517",
+    "warning": "5447644880824181073", "info": "5323442290708985472",
+    "play": "5348125953090403204", "refresh": "5375338737028841420",
+    "search": "5300885126765355672", "copy": "5323334860692015303",
+    "chat": "5443038326535759644", "mail": "5253742260054409879",
+    "call": "5307746710682869587", "chatgpt": "5287684458881756303",
+    "dollar": "5409048419211682843", "chart": "5451882707875276247",
+    "stats": "5231200819986047254", "calendar": "5413879192267805083",
+    "hourglass": "6113761177056057411", "lock": "5296369303661067030",
+    "user": "5890864241388293875", "users": "5942877472163892475",
+    "star": "5438496463044752972", "trophy": "5415655814079723871",
+    "tag": "5985433648810171091", "ban": "5260293700088511294",
+    "database": "5877485980901971030", "wifi": "5447410659077661506",
+    "gift": "5449800250032143374", "market": "5440841102871517055",
     "light": "5269282027256950225",
 }
 
 NORMAL_TO_PREMIUM = {
-    "💡": "light",
-    "🛒": "market",
-    "🎁": "gift",
-    "✅": "check",
-    "❌": "cross",
-    "⚠️": "warning",
-    "ℹ️": "info",
-    "▶️": "play",
-    "🔄": "refresh",
-    "🔍": "search",
-    "📋": "copy",
-    "💬": "chat",
-    "📧": "mail",
-    "📞": "call",
-    "🤖": "chatgpt",
-    "💵": "dollar",
-    "💰": "dollar",
-    "📈": "chart",
-    "📊": "stats",
-    "📅": "calendar",
-    "⏳": "hourglass",
-    "🔐": "lock",
-    "👤": "user",
-    "👥": "users",
-    "⭐": "star",
-    "💎": "star",
-    "🏆": "trophy",
-    "🎯": "trophy",
-    "🏷️": "tag",
-    "🆔": "tag",
-    "🚫": "ban",
-    "⛔": "ban",
-    "🗄️": "database",
-    "📦": "database",
-    "📶": "wifi",
-    "🌐": "wifi",
-    "🚀": "play",
-    "🔢": "stats",
-    "📭": "mail",
-    "👋": "user",
+    "💡": "light", "🛒": "market", "🎁": "gift", "✅": "check", "❌": "cross",
+    "⚠️": "warning", "ℹ️": "info", "▶️": "play", "🔄": "refresh", "🔍": "search",
+    "📋": "copy", "💬": "chat", "📧": "mail", "📞": "call", "🤖": "chatgpt",
+    "💵": "dollar", "💰": "dollar", "📈": "chart", "📊": "stats", "📅": "calendar",
+    "⏳": "hourglass", "🔐": "lock", "👤": "user", "👥": "users", "⭐": "star",
+    "💎": "star", "🏆": "trophy", "🎯": "trophy", "🏷️": "tag", "🆔": "tag",
+    "🚫": "ban", "⛔": "ban", "🗄️": "database", "📦": "database", "📶": "wifi",
+    "🌐": "wifi", "🚀": "play", "🔢": "stats", "📭": "mail", "👋": "user",
 }
 
 def emoji_tag(emoji_id, fallback=""):
@@ -127,49 +85,58 @@ def emoji_tag(emoji_id, fallback=""):
 
 def get_premium_emoji(name, fallback=""):
     emoji_id = EMOJI_IDS.get(name)
-    if emoji_id:
-        return emoji_tag(emoji_id, fallback)
-    return fallback
+    return emoji_tag(emoji_id, fallback) if emoji_id else fallback
 
 def convert_to_premium(text):
     for normal, premium_name in NORMAL_TO_PREMIUM.items():
         if normal in text:
-            premium = get_premium_emoji(premium_name, normal)
-            text = text.replace(normal, premium)
+            text = text.replace(normal, get_premium_emoji(premium_name, normal))
     return text
 
-# ============================================
-
-# Load/Save configuration
 def load_config():
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r') as f:
                 return json.load(f)
         except:
-            return DEFAULT_CONFIG.copy()
-    else:
-        return DEFAULT_CONFIG.copy()
+            pass
+    return DEFAULT_CONFIG.copy()
 
 def save_config(config):
     with open(CONFIG_FILE, 'w') as f:
         json.dump(config, f, indent=4)
 
-def escape_markdown(text):
-    if not text:
-        return ""
-    text = str(text)
-    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
-    for char in special_chars:
-        text = text.replace(char, f'\\{char}')
-    return text
+def load_users():
+    if os.path.exists(USERS_FILE):
+        try:
+            with open(USERS_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+def save_users(users):
+    with open(USERS_FILE, 'w') as f:
+        json.dump(users, f, indent=4)
+
+def load_prices():
+    if os.path.exists(PRICES_FILE):
+        try:
+            with open(PRICES_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+def save_prices(prices):
+    with open(PRICES_FILE, 'w') as f:
+        json.dump(prices, f, indent=4)
 
 def escape_html(text):
     if not text:
         return ""
     return html.escape(str(text))
 
-# --- Advanced Translation Engine ---
 TRANSLATIONS = {
     "Pacote de Valor por Tempo Limitado": "Limited Time Value Pack",
     "Passe Semanal de Diamante": "Weekly Diamond Pass",
@@ -191,7 +158,7 @@ class SmileOneTerryV37Bot:
         self.user_agent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         self.scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'android', 'mobile': True})
         self.headers = {
-            "User-Agent": self.user_agent, 
+            "User-Agent": self.user_agent,
             "Referer": f"{self.base_url}/br/customer/order",
             "X-Requested-With": "XMLHttpRequest"
         }
@@ -199,13 +166,8 @@ class SmileOneTerryV37Bot:
         self.last_market_update = None
         self.config = load_config()
         self.allowed_users = set()
-
-    def get_width(self):
-        try:
-            w = shutil.get_terminal_size().columns
-            return w if w > 80 else 80
-        except:
-            return 80
+        self.users = load_users()
+        self.prices = load_prices()
 
     def translate(self, text):
         for pt, en in TRANSLATIONS.items():
@@ -216,24 +178,21 @@ class SmileOneTerryV37Bot:
     def save_cookie(self, raw):
         try:
             d = {c.split('=', 1)[0].strip(): c.split('=', 1)[1].strip() for c in raw.split(';') if '=' in c}
-            with open(COOKIE_FILE, 'w') as f: 
+            with open(COOKIE_FILE, 'w') as f:
                 json.dump({"parsed_dict": d}, f)
             return True, "✅ Cookie saved successfully!"
         except Exception as e:
             return False, f"❌ Error saving cookie: {str(e)}"
 
     def check_auth(self):
-        if not os.path.exists(COOKIE_FILE): 
+        if not os.path.exists(COOKIE_FILE):
             return False, "NO_SESSION", None
-        
         try:
-            with open(COOKIE_FILE, 'r') as f: 
+            with open(COOKIE_FILE, 'r') as f:
                 cookies = json.load(f).get("parsed_dict", {})
-            
             res = self.scraper.get(f"{self.base_url}/br/customer/order", cookies=cookies, headers=self.headers)
             soup = BeautifulSoup(res.text, 'html.parser')
             det = soup.find('div', class_='user-details')
-            
             if det:
                 name = det.find('div', class_='user-name').get_text().strip()
                 bal_elem = soup.find('div', class_='balance-coins')
@@ -242,32 +201,23 @@ class SmileOneTerryV37Bot:
                     if len(bal_parts) > 1:
                         bal = bal_parts[1].get_text().strip()
                         return True, "AUTH_SUCCESS", {"name": name, "saldo": f"{bal} coin"}
-                
             return False, "DENIED", None
         except Exception as e:
             return False, f"ERROR: {str(e)}", None
 
     def id_check(self, u_id, z_id):
-        if not os.path.exists(COOKIE_FILE): 
+        if not os.path.exists(COOKIE_FILE):
             return False, "Auth Required"
-        
-        with open(COOKIE_FILE, 'r') as f: 
+        with open(COOKIE_FILE, 'r') as f:
             cookies = json.load(f).get("parsed_dict", {})
-        
         try:
             payload = {
-                "user_id": u_id, 
-                "zone_id": z_id, 
-                "pid": "22590", 
-                "checkrole": "1",
-                "pay_methond": "smilecoin", 
-                "channel_method": "smilecoin"
+                "user_id": u_id, "zone_id": z_id, "pid": "22590",
+                "checkrole": "1", "pay_methond": "smilecoin", "channel_method": "smilecoin"
             }
-            
-            res = self.scraper.post(f"{self.base_url}/merchant/mobilelegends/checkrole", 
+            res = self.scraper.post(f"{self.base_url}/merchant/mobilelegends/checkrole",
                                    data=payload, cookies=cookies, headers=self.headers)
             data = res.json()
-            
             if data.get('code') == 200:
                 return True, data.get('username')
             return False, data.get('info', 'Invalid ID')
@@ -278,100 +228,98 @@ class SmileOneTerryV37Bot:
         if not force_refresh and self.market_data and self.last_market_update:
             if (datetime.now() - self.last_market_update).seconds < 300:
                 return self.market_data
-        
         try:
             if not os.path.exists(COOKIE_FILE):
                 return None
-            
-            with open(COOKIE_FILE, 'r') as f: 
+            with open(COOKIE_FILE, 'r') as f:
                 cookies = json.load(f).get("parsed_dict", {})
-            
-            res = self.scraper.get(f"{self.base_url}/br/merchant/mobilelegends", 
+            res = self.scraper.get(f"{self.base_url}/br/merchant/mobilelegends",
                                   cookies=cookies, headers=self.headers)
-            
             match = re.search(r"info\s*=\s*JSON\.parse\('(.*?)'\);", res.text, re.DOTALL)
             data = json.loads(match.group(1)) if match else {}
-            
             soup = BeautifulSoup(res.text, 'html.parser')
             pkgs = []
-            
+            rate = self.config.get("mmk_exchange_rate", 85)
+            markup = self.config.get("default_markup", 1.15)
+
             for item in soup.find_all('li', class_='fr fs', id=True):
                 pid = item.get('id')
                 raw_name = item.find('h3').get_text(strip=True) if item.find('h3') else "Unknown Product"
                 name = self.translate(raw_name)
-                
                 coin_price = 0
                 if pid in data and 'smilecoin' in data[pid] and 'total_amount' in data[pid]['smilecoin']:
                     try:
                         coin_price = float(data[pid]['smilecoin']['total_amount'])
                     except:
                         coin_price = 0
-                
-                mmk_price = coin_price * self.config.get("mmk_exchange_rate", 75)
-                mmk_formatted = f"{int(mmk_price):,} MMK" if mmk_price.is_integer() else f"{mmk_price:,.0f} MMK"
+
+                if pid in self.prices:
+                    sell_mmk = self.prices[pid]
+                else:
+                    sell_mmk = coin_price * rate * markup
+
+                mmk_formatted = f"{int(sell_mmk):,} MMK" if sell_mmk.is_integer() else f"{sell_mmk:,.0f} MMK"
                 coin_formatted = f"{int(coin_price)} coin" if coin_price.is_integer() else f"{coin_price} coin"
-                
+
                 pkgs.append({
-                    "pid": pid, 
-                    "name": name, 
+                    "pid": pid,
+                    "name": name,
                     "price": coin_formatted,
                     "mmk_price": mmk_formatted,
-                    "coin_value": coin_price
+                    "coin_value": coin_price,
+                    "sell_mmk": sell_mmk
                 })
-            
             self.market_data = pkgs
             self.last_market_update = datetime.now()
             return pkgs
-            
         except Exception as e:
             print(f"{R}[!] Market Error: {e}{N}")
             return None
 
-    def format_market_for_telegram(self, pkgs):
-        if not pkgs:
-            return "❌ No market data available. Please check your cookie."
-        
-        rate = self.config.get("mmk_exchange_rate", 75)
-        message = f"<b>📊 SMILE.ONE MARKET PRODUCTS</b>\n"
-        message += f"<b>💰 Exchange Rate: 1 coin = {rate} MMK</b>\n\n"
-        
-        for i, p in enumerate(pkgs[:20], 1):
-            name = escape_html(p['name'])
-            if len(name) > 30:
-                name = name[:27] + "..."
-            
-            message += f"<b>{i:02d}.</b> <code>{name}</code>\n"
-            message += f"     💎 {p['price']} | 💵 {p['mmk_price']}\n"
-            message += f"     ID: <code>{p['pid']}</code>\n\n"
-        
-        message += "\n<i>Use /topup [UID] [ZID] [NO] [QTY] to purchase</i>"
-        return message
+    def get_user_balance(self, user_id):
+        uid = str(user_id)
+        if uid not in self.users:
+            self.users[uid] = {"balance": 0, "total_spent": 0, "orders": 0}
+            save_users(self.users)
+        return self.users[uid]["balance"]
+
+    def add_user_balance(self, user_id, amount):
+        uid = str(user_id)
+        if uid not in self.users:
+            self.users[uid] = {"balance": 0, "total_spent": 0, "orders": 0}
+        self.users[uid]["balance"] += amount
+        save_users(self.users)
+        return self.users[uid]["balance"]
+
+    def deduct_user_balance(self, user_id, amount):
+        uid = str(user_id)
+        if uid not in self.users:
+            return False
+        if self.users[uid]["balance"] < amount:
+            return False
+        self.users[uid]["balance"] -= amount
+        self.users[uid]["total_spent"] = self.users[uid].get("total_spent", 0) + amount
+        self.users[uid]["orders"] = self.users[uid].get("orders", 0) + 1
+        save_users(self.users)
+        return True
 
     def format_logs_for_telegram(self):
         if not os.path.exists(COOKIE_FILE):
-            return "❌ No session found. Please set cookie first."
-        
+            return "❌ No session found."
         try:
-            with open(COOKIE_FILE, 'r') as f: 
+            with open(COOKIE_FILE, 'r') as f:
                 cookies = json.load(f).get("parsed_dict", {})
-            
             params = {
-                "type": "orderlist", 
-                "p": "1", 
-                "pageSize": "5",
+                "type": "orderlist", "p": "1", "pageSize": "5",
                 "startdate": (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d"),
                 "enddate": datetime.now().strftime("%Y-%m-%d")
             }
-            
-            res = self.scraper.get(f"{self.base_url}/customer/activationcode/codelist", 
+            res = self.scraper.get(f"{self.base_url}/customer/activationcode/codelist",
                                   params=params, cookies=cookies, headers=self.headers)
             logs = res.json().get('list', [])
-            
             if not logs:
                 return "📭 No recent orders found."
-            
             message = "<b>📋 RECENT ORDERS</b>\n\n"
-            
             for item in logs:
                 status = self.translate(item.get('order_status', 'N/A'))
                 product = escape_html(self.translate(item.get('goods_name', 'Product')))
@@ -379,128 +327,72 @@ class SmileOneTerryV37Bot:
                 uid = item.get('user_id', '---')
                 zone = item.get('server_id', '---')
                 amount = item.get('transaction_amount', '0')
-                
                 status_emoji = "✅" if "Success" in status else "⏳" if "Pending" in status else "❌"
-                
                 message += f"{status_emoji} <b>{product}</b>\n"
                 message += f"   👤 UID: <code>{uid}</code> | Zone: <code>{zone}</code>\n"
                 message += f"   💰 {amount} coin | 📅 {timestamp}\n"
                 message += f"   📊 Status: {status}\n\n"
-            
             return message
-            
-        except Exception as e:
-            return f"❌ Error fetching logs: {escape_html(str(e))}"
-
-    async def redeem_code(self, code):
-        if not os.path.exists(COOKIE_FILE):
-            return "❌ No session found. Please set cookie first."
-        
-        try:
-            with open(COOKIE_FILE, 'r') as f: 
-                cookies = json.load(f).get("parsed_dict", {})
-            
-            ref_url = f"{self.base_url}/customer/activationcode"
-            res_page = self.scraper.get(ref_url, cookies=cookies)
-            soup = BeautifulSoup(res_page.text, 'html.parser')
-            csrf_input = soup.find('input', {'name': '_csrf'})
-            
-            if not csrf_input:
-                return "❌ Cannot get CSRF token. Cookie might be expired."
-            
-            csrf_token = csrf_input['value']
-            
-            headers = {
-                "accept": "application/json, text/javascript, */*; q=0.01",
-                "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-                "x-requested-with": "XMLHttpRequest",
-                "origin": self.base_url,
-                "referer": ref_url
-            }
-            
-            check_url = f"{self.base_url}/smilecard/pay/checkcard"
-            payload_check = {"sec": code}
-            
-            res1 = self.scraper.post(check_url, data=payload_check, cookies=cookies, headers=headers)
-            data1 = res1.json()
-            
-            if data1.get('code') != 200:
-                return f"❌ Step 1 Failed: {data1.get('info', 'Unknown error')}"
-            
-            await asyncio.sleep(1.2)
-            
-            pay_url = f"{self.base_url}/smilecard/pay/payajax"
-            payload_pay = {"sec": code}
-            
-            res2 = self.scraper.post(pay_url, data=payload_pay, cookies=cookies, headers=headers)
-            data2 = res2.json()
-            
-            if data2.get('code') == 200:
-                return f"✅ Success! {data2.get('info', 'Balance added')}"
-            else:
-                return f"❌ Step 2 Failed (Code {data2.get('code')}): {data2.get('info', 'Unknown error')}"
-                
         except Exception as e:
             return f"❌ Error: {escape_html(str(e))}"
 
-    async def topup_diamonds(self, uid, zone_id, product_index, quantity=1):
+    async def topup_diamonds(self, telegram_user_id, uid, zone_id, product_index, quantity=1):
         auth, status, profile = self.check_auth()
         if not auth:
             return "❌ Authentication failed. Please check your cookie."
-        
+
         pkgs = self.get_market()
         if not pkgs:
-            return "❌ Cannot fetch market data. Please try again later."
-        
+            return "❌ Cannot fetch market data."
+
         if product_index < 1 or product_index > len(pkgs):
-            return f"❌ Invalid product number. Please choose 1-{len(pkgs)}"
-        
+            return f"❌ Invalid product number."
+
         min_qty = self.config.get("min_quantity", 1)
-        max_qty = self.config.get("max_quantity", 100)
-        
+        max_qty = self.config.get("max_quantity", 50)
         if quantity < min_qty or quantity > max_qty:
             return f"❌ Quantity must be between {min_qty}-{max_qty}"
-        
+
         product = pkgs[product_index - 1]
-        total_cost = product['coin_value'] * quantity
-        total_mmk = total_cost * self.config.get("mmk_exchange_rate", 75)
-        
+        total_cost_mmk = product['sell_mmk'] * quantity
+
+        user_balance = self.get_user_balance(telegram_user_id)
+        if user_balance < total_cost_mmk:
+            return (
+                f"❌ <b>Coin မလုံလောက်ပါ</b>\n\n"
+                f"💰 လိုအပ်သော ပမာဏ: <b>{total_cost_mmk:,.0f} MMK</b>\n"
+                f"💵 သင့်လက်ကျန်: <b>{user_balance:,.0f} MMK</b>\n\n"
+                f"Admin ကို ဆက်သွယ်ပြီး Coin ဖြည့်ပါ။"
+            )
+
         try:
-            with open(COOKIE_FILE, 'r') as f: 
+            with open(COOKIE_FILE, 'r') as f:
                 cookies = json.load(f).get("parsed_dict", {})
-            
+
             res_init = self.scraper.get(f"{self.base_url}/br/merchant/mobilelegends", cookies=cookies)
             soup = BeautifulSoup(res_init.text, 'html.parser')
             csrf_input = soup.find('input', {'name': '_csrf'})
-            
             if not csrf_input:
-                return "❌ CSRF token not found. Cookie might be expired."
-            
+                return "❌ CSRF token not found."
             csrf_token = csrf_input['value']
-            
+
             query_payload = {
-                "user_id": uid,
-                "zone_id": zone_id,
-                "pid": product['pid'],
-                "checkrole": "", 
-                "pay_methond": "smilecoin", 
-                "channel_method": "smilecoin"
+                "user_id": uid, "zone_id": zone_id, "pid": product['pid'],
+                "checkrole": "", "pay_methond": "smilecoin", "channel_method": "smilecoin"
             }
-            
-            res_query = self.scraper.post(f"{self.base_url}/merchant/mobilelegends/query", 
+            res_query = self.scraper.post(f"{self.base_url}/merchant/mobilelegends/query",
                                          data=query_payload, cookies=cookies, headers=self.headers)
             query_data = res_query.json()
-            
             if query_data.get('code') != 200:
                 return f"❌ User check failed: {query_data.get('info', 'Unknown error')}"
-            
+
             username = query_data.get('username', 'Unknown')
             flowid = query_data.get('flowid')
-            
+
             results = []
             success_count = 0
             fail_count = 0
-            
+
             for i in range(quantity):
                 try:
                     pay_payload = {
@@ -514,18 +406,13 @@ class SmileOneTerryV37Bot:
                         "email": "",
                         "coupon_id": ""
                     }
-                    
-                    res_pay = self.scraper.post(f"{self.base_url}/merchant/mobilelegends/pay", 
+                    res_pay = self.scraper.post(f"{self.base_url}/merchant/mobilelegends/pay",
                                                data=pay_payload, cookies=cookies, headers=self.headers, allow_redirects=False)
-                    
                     redirect_url = res_pay.headers.get('Location') or res_pay.headers.get('x-redirect')
-                    
                     if redirect_url:
                         if not redirect_url.startswith('http'):
                             redirect_url = f"{self.base_url}{redirect_url}"
-                        
                         res_final = self.scraper.get(redirect_url, cookies=cookies)
-                        
                         if "sucesso" in res_final.text.lower():
                             success_count += 1
                             results.append(f"✅ #{i+1} Successful")
@@ -534,42 +421,34 @@ class SmileOneTerryV37Bot:
                             fail_reason = "Unknown"
                             if "saldo insuficiente" in res_final.text.lower():
                                 fail_reason = "Insufficient Balance"
-                            elif "csrf" in res_final.text.lower():
-                                fail_reason = "CSRF Error"
                             results.append(f"❌ #{i+1} Failed ({fail_reason})")
                     else:
                         fail_count += 1
                         results.append(f"❌ #{i+1} No redirect")
-                    
                     if i < quantity - 1:
                         await asyncio.sleep(2)
-                        
                 except Exception as e:
                     fail_count += 1
-                    results.append(f"❌ #{i+1} Error: {str(e)[:50]}")
+                    results.append(f"❌ #{i+1} Error")
                     await asyncio.sleep(2)
-            
+
+            if success_count > 0:
+                actual_cost = product['sell_mmk'] * success_count
+                self.deduct_user_balance(telegram_user_id, actual_cost)
+
+            new_balance = self.get_user_balance(telegram_user_id)
+
             summary = (
-                f"<b>🎯 BULK TOPUP COMPLETE</b>\n\n"
+                f"<b>🎯 TOPUP COMPLETE</b>\n\n"
                 f"👤 Username: <code>{escape_html(username)}</code>\n"
                 f"🆔 UID: <code>{escape_html(uid)}</code> | Zone: <code>{escape_html(zone_id)}</code>\n"
                 f"📦 Product: {escape_html(product['name'])}\n"
                 f"🔢 Quantity: {quantity}\n"
-                f"💰 Total Cost: {total_cost} coin ({total_mmk:,.0f} MMK)\n\n"
-                f"<b>📊 RESULTS</b>\n"
-                f"✅ Successful: {success_count}\n"
-                f"❌ Failed: {fail_count}\n"
-                f"📈 Success Rate: {(success_count/quantity)*100:.1f}%\n\n"
+                f"💰 Cost: <b>{product['sell_mmk'] * quantity:,.0f} MMK</b>\n"
+                f"✅ Success: {success_count} | ❌ Failed: {fail_count}\n\n"
+                f"💵 သင့်လက်ကျန်: <b>{new_balance:,.0f} MMK</b>"
             )
-            
-            if fail_count > 0:
-                summary += f"<b>⚠️ Failed Items:</b>\n"
-                for result in results:
-                    if "❌" in result:
-                        summary += f"{escape_html(result)}\n"
-            
             return summary
-            
         except Exception as e:
             return f"❌ Topup error: {escape_html(str(e))}"
 
@@ -578,341 +457,456 @@ bot_instance = SmileOneTerryV37Bot()
 def is_authorized(user_id):
     return user_id == bot_instance.config.get("admin_id") or user_id in bot_instance.allowed_users
 
+def is_admin(user_id):
+    return user_id == bot_instance.config.get("admin_id")
+
+# ==================== KEYBOARDS (Full Width) ====================
+
+def main_menu_keyboard(is_admin_user=False):
+    keyboard = [
+        [InlineKeyboardButton("🛒 Market", callback_data="menu_market")],
+        [InlineKeyboardButton("💵 Balance", callback_data="menu_balance")],
+        [InlineKeyboardButton("💎 Topup", callback_data="menu_topup")],
+        [InlineKeyboardButton("📋 Logs", callback_data="menu_logs")],
+        [InlineKeyboardButton("👤 Status", callback_data="menu_status")],
+        [InlineKeyboardButton("ℹ️ Help", callback_data="menu_help")],
+    ]
+    if is_admin_user:
+        keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="menu_admin")])
+    return InlineKeyboardMarkup(keyboard)
+
+def back_to_menu_keyboard():
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Main Menu", callback_data="menu_main")]])
+
+def market_keyboard(pkgs, page=0, per_page=8):
+    keyboard = []
+    start = page * per_page
+    end = start + per_page
+    page_pkgs = pkgs[start:end]
+
+    for i, p in enumerate(page_pkgs, start=start + 1):
+        name = p['name'][:22] + "..." if len(p['name']) > 22 else p['name']
+        btn_text = f"{i}. {name} | {p['mmk_price']}"
+        keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"select_prod_{i}")])
+
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"market_page_{page-1}"))
+    if end < len(pkgs):
+        nav.append(InlineKeyboardButton("Next ➡️", callback_data=f"market_page_{page+1}"))
+    if nav:
+        keyboard.append(nav)
+
+    keyboard.append([InlineKeyboardButton("🔄 Refresh", callback_data="menu_market")])
+    keyboard.append([InlineKeyboardButton("🔙 Main Menu", callback_data="menu_main")])
+    return InlineKeyboardMarkup(keyboard)
+
+def qty_keyboard(prod_index):
+    keyboard = [
+        [
+            InlineKeyboardButton("1", callback_data=f"qty_{prod_index}_1"),
+            InlineKeyboardButton("2", callback_data=f"qty_{prod_index}_2"),
+            InlineKeyboardButton("3", callback_data=f"qty_{prod_index}_3"),
+            InlineKeyboardButton("5", callback_data=f"qty_{prod_index}_5"),
+        ],
+        [
+            InlineKeyboardButton("10", callback_data=f"qty_{prod_index}_10"),
+            InlineKeyboardButton("20", callback_data=f"qty_{prod_index}_20"),
+        ],
+        [InlineKeyboardButton("🔙 Back to Market", callback_data="menu_market")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def admin_keyboard():
+    keyboard = [
+        [InlineKeyboardButton("🍪 Set Cookie", callback_data="admin_cookie")],
+        [InlineKeyboardButton("🔄 Refresh Market", callback_data="admin_refresh")],
+        [InlineKeyboardButton("💱 Set Rate", callback_data="admin_setrate")],
+        [InlineKeyboardButton("📈 Set Markup", callback_data="admin_setmarkup")],
+        [InlineKeyboardButton("💵 Add Coin to User", callback_data="admin_addcoin")],
+        [InlineKeyboardButton("👥 Manage Users", callback_data="admin_users")],
+        [InlineKeyboardButton("🔙 Main Menu", callback_data="menu_main")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+# ==================== COMMANDS & CALLBACKS ====================
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    username = escape_html(update.effective_user.username or "Unknown")
-    first_name = escape_html(update.effective_user.first_name or "")
-    last_name = escape_html(update.effective_user.last_name or "")
-    
-    full_name = f"{first_name} {last_name}".strip()
-    if not full_name:
-        full_name = username
-    
     if not is_authorized(user_id):
         msg = (
             f"⛔ <b>Access Denied</b>\n\n"
-            f"You are not authorized to use this bot.\n"
-            f"Contact developer: {bot_instance.config.get('developer_contact', '@Terry85855')}"
+            f"You are not authorized.\n"
+            f"Contact: {bot_instance.config.get('developer_contact')}"
         )
         await update.message.reply_text(convert_to_premium(msg), parse_mode=ParseMode.HTML)
         return
-    
-    rate = bot_instance.config.get("mmk_exchange_rate", 75)
-    
-    
-    welcome_text = (
-        f"🤖 <b>{escape_html(bot_instance.config.get('bot_name', 'SMILE.ONE BOT'))}</b>\n"
+
+    first_name = escape_html(update.effective_user.first_name or "User")
+    balance = bot_instance.get_user_balance(user_id)
+    rate = bot_instance.config.get("mmk_exchange_rate", 85)
+
+    text = (
+        f"🤖 <b>{escape_html(bot_instance.config.get('bot_name'))}</b>\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"👋 Welcome, <b>{escape_html(full_name)}</b>!\n"
-        f"💰 Current Rate: <code>1 coin = {rate} MMK</code>\n\n"
-        f"👤 /status - Check account status\n"
-        f"🛒 /market - View products & prices\n"
-        f"📋 /logs - View recent orders\n"
-        f"🔍 /check [UID] [ZID] - Check user\n"
-        f"🎁 /redeem [CODE] - Redeem code\n"
-        f"💎 /topup [UID] [ZID] [NO] [QTY] - Bulk purchase\n"
-        f"📊 /rate - Check exchange rate\n\n"
-        f"💡 <b>Example:</b>\n"
-        f"<code>/topup 58515640 2099 30 3</code>\n"
-        f"<i>(UID=58515640, ZID=2099, Product#30, Qty=3)</i>\n\n"
-        f"📞 <b>Developer:</b> {bot_instance.config.get('developer_contact', '@Terry85855')}"
+        f"👋 Welcome, <b>{first_name}</b>!\n\n"
+        f"💵 Coin လက်ကျန်: <code>{balance:,.0f} MMK</code>\n"
+        f"💱 Rate: <code>1 coin = {rate} MMK</code>\n\n"
+        f"အောက်က Button တွေကို နှိပ်ပြီး အသုံးပြုပါ။"
     )
-    
-    await update.message.reply_text(convert_to_premium(welcome_text), parse_mode=ParseMode.HTML)
-
-
-async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update.effective_user.id):
-        return
-    
-    auth, status, profile = bot_instance.check_auth()
-    
-    if auth:
-        message = (
-            f"<b>✅ ACCOUNT STATUS</b>\n\n"
-            f"👤 Name: {escape_html(profile['name'])}\n"
-            f"💰 Balance: {escape_html(profile['saldo'])}\n"
-            f"📅 Last Check: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        )
-    else:
-        message = f"<b>❌ NOT AUTHENTICATED</b>\n\nStatus: {escape_html(status)}\n\nAdmin needs to set cookie."
-    
-    await update.message.reply_text(convert_to_premium(message), parse_mode=ParseMode.HTML)
-
-async def market_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update.effective_user.id):
-        return
-    
-    await update.message.reply_text(convert_to_premium("⏳ Fetching market data..."),parse_mode=ParseMode.HTML)
-    
-    pkgs = bot_instance.get_market()
-    message = bot_instance.format_market_for_telegram(pkgs)
-    
-    if len(message) > 4000:
-        parts = [message[i:i+4000] for i in range(0, len(message), 4000)]
-        for part in parts:
-            await update.message.reply_text(convert_to_premium(part), parse_mode=ParseMode.HTML)
-            await asyncio.sleep(0.5)
-    else:
-        await update.message.reply_text(convert_to_premium(message), parse_mode=ParseMode.HTML)
-
-async def logs_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update.effective_user.id):
-        return
-    
-    await update.message.reply_text(convert_to_premium("⏳ Fetching recent orders..."),parse_mode=ParseMode.HTML)
-    message = bot_instance.format_logs_for_telegram()
-    await update.message.reply_text(convert_to_premium(message), parse_mode=ParseMode.HTML)
-
-async def cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != bot_instance.config.get("admin_id"):
-        await update.message.reply_text(convert_to_premium("⛔ This command is for admin only."),parse_mode=ParseMode.HTML)
-        return
-    
-    if context.args:
-        cookie_text = ' '.join(context.args)
-        success, result = bot_instance.save_cookie(cookie_text)
-        await update.message.reply_text(convert_to_premium(result))
-        
-        if success:
-            bot_instance.market_data = None
-            await update.message.reply_text(convert_to_premium("🔄 Market cache cleared. Use /market to refresh."))
-    else:
-        msg = (
-            "🔐 <b>SET COOKIE</b>\n\n"
-            "Send: /cookie [cookie_text]\n\n"
-            "To get cookie:\n"
-            "1. Login to smile.one\n"
-            "2. Press F12 → Application tab\n"
-            "3. Copy cookie from Storage → Cookies\n"
-            "4. Paste after /cookie command"
-        )
-        await update.message.reply_text(convert_to_premium(msg), parse_mode=ParseMode.HTML)
-
-async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update.effective_user.id):
-        return
-    
-    if len(context.args) != 2:
-        await update.message.reply_text(convert_to_premium("❌ Usage: /check [UID] [ZID]"),parse_mode=ParseMode.HTML)
-        return
-    
-    uid, zid = context.args[0], context.args[1]
-    msg = f"⏳ Checking UID <code>{escape_html(uid)}</code> Zone <code>{escape_html(zid)}</code>..."
-    await update.message.reply_text(convert_to_premium(msg), parse_mode=ParseMode.HTML)
-    
-    success, result = bot_instance.id_check(uid, zid)
-    
-    if success:
-        res_msg = f"✅ Username found: <code>{escape_html(result)}</code>"
-    else:
-        res_msg = f"❌ {escape_html(result)}"
-        
-    await update.message.reply_text(convert_to_premium(res_msg), parse_mode=ParseMode.HTML)
-
-async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update.effective_user.id):
-        return
-    
-    if not context.args:
-        
-        error_msg = "❌ <b>Usage:</b> <code>/redeem [activation_code]</code>"
-        await update.message.reply_text(convert_to_premium(error_msg), parse_mode=ParseMode.HTML)
-        return
-    
-    code = context.args[0]
-    
-    
-    msg = f"⏳ <b>Redeeming code:</b> <code>{escape_html(code)}</code>\n\n<i>Please wait...</i>"
-    await update.message.reply_text(convert_to_premium(msg), parse_mode=ParseMode.HTML)
-    
-    result = await bot_instance.redeem_code(code)
-    
-    await update.message.reply_text(convert_to_premium(result), parse_mode=ParseMode.HTML)
-
-
-async def topup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update.effective_user.id):
-        return
-    
-    if len(context.args) < 3:
-        msg = (
-            "❌ <b>Usage:</b> /topup [UID] [ZID] [PRODUCT_NO] [QUANTITY]\n\n"
-            "<b>Example:</b>\n"
-            "<code>/topup 58515640 2099 30 3</code>\n"
-            "<code>/topup 12345678 8888 5 10</code>\n\n"
-            "<i>Note: Quantity is optional, default is 1</i>"
-        )
-        await update.message.reply_text(convert_to_premium(msg), parse_mode=ParseMode.HTML)
-        return
-    
-    uid = context.args[0]
-    zid = context.args[1]
-    
-    try:
-        product_no = int(context.args[2])
-    except ValueError:
-        await update.message.reply_text(convert_to_premium("❌ Product number must be a valid integer"),parse_mode=ParseMode.HTML)
-        return
-    
-    if len(context.args) >= 4:
-        try:
-            quantity = int(context.args[3])
-            min_qty = bot_instance.config.get("min_quantity", 1)
-            max_qty = bot_instance.config.get("max_quantity", 100)
-            if quantity < min_qty or quantity > max_qty:
-                await update.message.reply_text(convert_to_premium(f"❌ Quantity must be between {min_qty}-{max_qty}"),parse_mode=ParseMode.HTML)
-                return
-        except ValueError:
-            await update.message.reply_text(convert_to_premium("❌ Quantity must be a valid integer"),parse_mode=ParseMode.HTML)
-            return
-    else:
-        quantity = 1
-    
-    init_msg = (
-        f"<b>🚀 STARTING TOPUP</b>\n\n"
-        f"🆔 UID: <code>{escape_html(uid)}</code>\n"
-        f"🌐 Zone: <code>{escape_html(zid)}</code>\n"
-        f"📦 Product: #{product_no}\n"
-        f"🔢 Quantity: {quantity}\n\n"
-        f"⏳ Please wait..."
+    await update.message.reply_text(
+        convert_to_premium(text),
+        parse_mode=ParseMode.HTML,
+        reply_markup=main_menu_keyboard(is_admin(user_id))
     )
-    
-    status_msg = await update.message.reply_text(convert_to_premium(init_msg), parse_mode=ParseMode.HTML)
-    
-    result = await bot_instance.topup_diamonds(uid, zid, product_no, quantity)
-    
-    await status_msg.edit_text(convert_to_premium(result), parse_mode=ParseMode.HTML)
 
-async def refresh_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != bot_instance.config.get("admin_id"):
-        await update.message.reply_text(convert_to_premium("⛔ This command is for admin only."),parse_mode=ParseMode.HTML)
-        return
-    
-    bot_instance.market_data = None
-    bot_instance.last_market_update = None
-    await update.message.reply_text(convert_to_premium("🔄 Market cache cleared. Use /market to fetch fresh data."),parse_mode=ParseMode.HTML)
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    data = query.data
 
-async def rate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update.effective_user.id):
+    if not is_authorized(user_id):
+        await query.edit_message_text("⛔ Access Denied")
         return
-    
-    rate = bot_instance.config.get("mmk_exchange_rate", 75)
-    await update.message.reply_text(convert_to_premium(f"<b>💰 Current Exchange Rate</b>\n\n1 coin = {rate} MMK"), parse_mode=ParseMode.HTML)
 
-async def setrate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != bot_instance.config.get("admin_id"):
-        await update.message.reply_text(convert_to_premium("⛔ This command is for admin only."),parse_mode=ParseMode.HTML)
-        return
-    
-    if not context.args:
-        await update.message.reply_text(convert_to_premium("❌ Usage: /setrate [new_rate]\nExample: /setrate 80"),parse_mode=ParseMode.HTML)
-        return
-    
-    try:
-        new_rate = float(context.args[0])
-        if new_rate <= 0:
-            await update.message.reply_text(convert_to_premium("❌ Rate must be positive"),parse_mode=ParseMode.HTML)
-            return
-        
-        bot_instance.config["mmk_exchange_rate"] = new_rate
-        save_config(bot_instance.config)
-        bot_instance.market_data = None
-        await update.message.reply_text(convert_to_premium(f"✅ Exchange rate updated to {new_rate} MMK per coin"),parse_mode=ParseMode.HTML)
-    except ValueError:
-        await update.message.reply_text(convert_to_premium("❌ Invalid rate value"))
+    # ===== MAIN MENU =====
+    if data == "menu_main":
+        balance = bot_instance.get_user_balance(user_id)
+        text = (
+            f"🤖 <b>Main Menu</b>\n\n"
+            f"💵 Coin လက်ကျန်: <code>{balance:,.0f} MMK</code>\n\n"
+            f"Button ကို နှိပ်ပြီး ဆက်လုပ်ပါ။"
+        )
+        await query.edit_message_text(
+            convert_to_premium(text),
+            parse_mode=ParseMode.HTML,
+            reply_markup=main_menu_keyboard(is_admin(user_id))
+        )
 
-async def adduser_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != bot_instance.config.get("admin_id"):
-        await update.message.reply_text(convert_to_premium("⛔ This command is for admin only."),parse_mode=ParseMode.HTML)
-        return
-    
-    if not context.args:
-        await update.message.reply_text(convert_to_premium("❌ Usage: /adduser [user_id]"),parse_mode=ParseMode.HTML)
-        return
-    
-    try:
-        user_id = int(context.args[0])
-        bot_instance.allowed_users.add(user_id)
-        await update.message.reply_text(convert_to_premium(f"✅ User {user_id} added to allowed list"),parse_mode=ParseMode.HTML)
-    except ValueError:
-        await update.message.reply_text(convert_to_premium("❌ Invalid user ID"),parse_mode=ParseMode.HTML)
+    elif data == "menu_balance":
+        bal = bot_instance.get_user_balance(user_id)
+        text = f"<b>💵 သင့် Coin လက်ကျန်</b>\n\n💰 <code>{bal:,.0f} MMK</code>"
+        await query.edit_message_text(
+            convert_to_premium(text),
+            parse_mode=ParseMode.HTML,
+            reply_markup=back_to_menu_keyboard()
+        )
 
-async def removeuser_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != bot_instance.config.get("admin_id"):
-        await update.message.reply_text(convert_to_premium("⛔ This command is for admin only."),parse_mode=ParseMode.HTML)
-        return
-    
-    if not context.args:
-        await update.message.reply_text(convert_to_premium("❌ Usage: /removeuser [user_id]"),parse_mode=ParseMode.HTML)
-        return
-    
-    try:
-        user_id = int(context.args[0])
-        if user_id in bot_instance.allowed_users:
-            bot_instance.allowed_users.remove(user_id)
-            await update.message.reply_text(convert_to_premium(f"✅ User {user_id} removed from allowed list"),parse_mode=ParseMode.HTML)
+    elif data == "menu_status":
+        auth, status, profile = bot_instance.check_auth()
+        if auth:
+            text = (
+                f"<b>✅ ACCOUNT STATUS</b>\n\n"
+                f"👤 Name: {escape_html(profile['name'])}\n"
+                f"💰 Balance: {escape_html(profile['saldo'])}"
+            )
         else:
-            await update.message.reply_text(convert_to_premium(f"❌ User {user_id} not in allowed list"),parse_mode=ParseMode.HTML)
-    except ValueError:
-        await update.message.reply_text(convert_to_premium("❌ Invalid user ID"),parse_mode=ParseMode.HTML)
+            text = f"<b>❌ NOT AUTHENTICATED</b>\n\n{escape_html(status)}"
+        await query.edit_message_text(
+            convert_to_premium(text),
+            parse_mode=ParseMode.HTML,
+            reply_markup=back_to_menu_keyboard()
+        )
 
-async def listusers_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != bot_instance.config.get("admin_id"):
-        await update.message.reply_text(convert_to_premium("⛔ This command is for admin only."),parse_mode=ParseMode.HTML)
+    elif data == "menu_logs":
+        await query.edit_message_text(convert_to_premium("⏳ Fetching logs..."), parse_mode=ParseMode.HTML)
+        msg = bot_instance.format_logs_for_telegram()
+        await query.edit_message_text(
+            convert_to_premium(msg),
+            parse_mode=ParseMode.HTML,
+            reply_markup=back_to_menu_keyboard()
+        )
+
+    elif data == "menu_help":
+        text = (
+            "<b>ℹ️ Help</b>\n\n"
+            "🛒 <b>Market</b> - Product များကြည့်ပြီး Topup လုပ်ရန်\n"
+            "💵 <b>Balance</b> - သင့် Coin လက်ကျန်\n"
+            "💎 <b>Topup</b> - Diamond ဝယ်ရန်\n"
+            "📋 <b>Logs</b> - နောက်ဆုံး Order များ\n\n"
+            f"📞 Developer: {bot_instance.config.get('developer_contact')}"
+        )
+        await query.edit_message_text(
+            convert_to_premium(text),
+            parse_mode=ParseMode.HTML,
+            reply_markup=back_to_menu_keyboard()
+        )
+
+    elif data == "menu_market" or data.startswith("market_page_"):
+        page = 0
+        if data.startswith("market_page_"):
+            page = int(data.split("_")[-1])
+
+        await query.edit_message_text(convert_to_premium("⏳ Loading market..."), parse_mode=ParseMode.HTML)
+        pkgs = bot_instance.get_market()
+        if not pkgs:
+            await query.edit_message_text(
+                convert_to_premium("❌ Market data မရရှိပါ။ Cookie စစ်ပါ။"),
+                parse_mode=ParseMode.HTML,
+                reply_markup=back_to_menu_keyboard()
+            )
+            return
+
+        rate = bot_instance.config.get("mmk_exchange_rate", 85)
+        text = (
+            f"<b>🛒 MARKET PRODUCTS</b>\n"
+            f"💱 Rate: 1 coin = {rate} MMK\n\n"
+            f"Product ကို နှိပ်ပြီး Topup လုပ်ပါ။"
+        )
+        await query.edit_message_text(
+            convert_to_premium(text),
+            parse_mode=ParseMode.HTML,
+            reply_markup=market_keyboard(pkgs, page)
+        )
+
+    elif data.startswith("select_prod_"):
+        prod_index = int(data.split("_")[-1])
+        pkgs = bot_instance.get_market()
+        if not pkgs or prod_index < 1 or prod_index > len(pkgs):
+            await query.edit_message_text("❌ Invalid product", reply_markup=back_to_menu_keyboard())
+            return
+
+        product = pkgs[prod_index - 1]
+        context.user_data['selected_prod'] = prod_index
+        context.user_data['selected_product_name'] = product['name']
+        context.user_data['selected_sell_mmk'] = product['sell_mmk']
+
+        text = (
+            f"<b>📦 Selected Product</b>\n\n"
+            f"Name: <b>{escape_html(product['name'])}</b>\n"
+            f"Price: <b>{product['mmk_price']}</b>\n\n"
+            f"Quantity ရွေးပါ:"
+        )
+        await query.edit_message_text(
+            convert_to_premium(text),
+            parse_mode=ParseMode.HTML,
+            reply_markup=qty_keyboard(prod_index)
+        )
+
+    elif data.startswith("qty_"):
+        parts = data.split("_")
+        prod_index = int(parts[1])
+        qty = int(parts[2])
+        context.user_data['selected_prod'] = prod_index
+        context.user_data['selected_qty'] = qty
+
+        product_name = context.user_data.get('selected_product_name', 'Product')
+        sell_mmk = context.user_data.get('selected_sell_mmk', 0)
+        total = sell_mmk * qty
+
+        text = (
+            f"<b>💎 TOPUP CONFIRM</b>\n\n"
+            f"📦 Product: <b>{escape_html(product_name)}</b>\n"
+            f"🔢 Quantity: <b>{qty}</b>\n"
+            f"💰 Total: <b>{total:,.0f} MMK</b>\n\n"
+            f"အခု <b>UID နဲ့ Zone ID</b> ကို ဤပုံစံဖြင့် ပို့ပါ:\n\n"
+            f"<code>123456789 2001</code>\n\n"
+            f"<i>(UID space ZoneID)</i>"
+        )
+        await query.edit_message_text(
+            convert_to_premium(text),
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="menu_market")]])
+        )
+        context.user_data['waiting_for_uid'] = True
+
+    elif data == "menu_topup":
+        text = (
+            "<b>💎 TOPUP</b>\n\n"
+            "Market ကို သွားပြီး Product ရွေးပါ။\n"
+            "သို့မဟုတ် /topup command သုံးပါ။"
+        )
+        await query.edit_message_text(
+            convert_to_premium(text),
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🛒 Go to Market", callback_data="menu_market")],
+                [InlineKeyboardButton("🔙 Main Menu", callback_data="menu_main")]
+            ])
+        )
+
+    elif data == "menu_admin":
+        if not is_admin(user_id):
+            await query.answer("Admin only!", show_alert=True)
+            return
+        text = "<b>⚙️ ADMIN PANEL</b>\n\nစီမံခန့်ခွဲရန် Button နှိပ်ပါ။"
+        await query.edit_message_text(
+            convert_to_premium(text),
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin_keyboard()
+        )
+
+    elif data == "admin_refresh":
+        if not is_admin(user_id):
+            return
+        bot_instance.market_data = None
+        bot_instance.last_market_update = None
+        await query.edit_message_text(
+            convert_to_premium("🔄 Market cache cleared!"),
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin_keyboard()
+        )
+
+    elif data == "admin_cookie":
+        if not is_admin(user_id):
+            return
+        context.user_data['waiting_cookie'] = True
+        await query.edit_message_text(
+            convert_to_premium("🍪 Cookie ကို ဤ message ကို reply လုပ်ပြီး ပို့ပါ။\n\nCancel လုပ်ရန် /cancel"),
+            parse_mode=ParseMode.HTML
+        )
+
+    elif data == "admin_setrate":
+        if not is_admin(user_id):
+            return
+        context.user_data['waiting_rate'] = True
+        await query.edit_message_text(
+            convert_to_premium("💱 Rate အသစ်ကို ပို့ပါ (ဥပမာ: 90)\n\nCancel: /cancel"),
+            parse_mode=ParseMode.HTML
+        )
+
+    elif data == "admin_setmarkup":
+        if not is_admin(user_id):
+            return
+        context.user_data['waiting_markup'] = True
+        await query.edit_message_text(
+            convert_to_premium("📈 Markup ပို့ပါ (ဥပမာ: 1.20 = 20% profit)\n\nCancel: /cancel"),
+            parse_mode=ParseMode.HTML
+        )
+
+    elif data == "admin_addcoin":
+        if not is_admin(user_id):
+            return
+        context.user_data['waiting_addcoin'] = True
+        await query.edit_message_text(
+            convert_to_premium("💵 Format: <code>USER_ID AMOUNT</code>\nဥပမာ: <code>123456789 50000</code>\n\nCancel: /cancel"),
+            parse_mode=ParseMode.HTML
+        )
+
+    elif data == "admin_users":
+        if not is_admin(user_id):
+            return
+        users_list = "\n".join([f"• <code>{uid}</code>" for uid in bot_instance.allowed_users]) or "No extra users"
+        text = f"<b>👥 Allowed Users</b>\n\n{users_list}\n\n/adduser နဲ့ /removeuser သုံးပါ။"
+        await query.edit_message_text(
+            convert_to_premium(text),
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin_keyboard()
+        )
+
+async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if not is_authorized(user_id):
         return
-    
-    if not bot_instance.allowed_users:
-        await update.message.reply_text(convert_to_premium("📋 No additional users allowed"),parse_mode=ParseMode.HTML)
-    else:
-        users_list = "\n".join([f"• <code>{uid}</code>" for uid in bot_instance.allowed_users])
-        await update.message.reply_text(convert_to_premium(f"<b>📋 Allowed Users</b>\n\n{users_list}"), parse_mode=ParseMode.HTML)
+
+    text = update.message.text.strip()
+
+    # Waiting for UID ZID after selecting product + qty
+    if context.user_data.get('waiting_for_uid'):
+        context.user_data['waiting_for_uid'] = False
+        parts = text.split()
+        if len(parts) != 2:
+            await update.message.reply_text(
+                convert_to_premium("❌ မှားနေပါတယ်။ ဥပမာ: <code>123456789 2001</code>"),
+                parse_mode=ParseMode.HTML,
+                reply_markup=back_to_menu_keyboard()
+            )
+            return
+
+        uid, zid = parts[0], parts[1]
+        prod_index = context.user_data.get('selected_prod', 1)
+        qty = context.user_data.get('selected_qty', 1)
+
+        status_msg = await update.message.reply_text(
+            convert_to_premium("⏳ Topup လုပ်နေပါသည်... ခဏစောင့်ပါ။"),
+            parse_mode=ParseMode.HTML
+        )
+        result = await bot_instance.topup_diamonds(user_id, uid, zid, prod_index, qty)
+        await status_msg.edit_text(
+            convert_to_premium(result),
+            parse_mode=ParseMode.HTML,
+            reply_markup=main_menu_keyboard(is_admin(user_id))
+        )
+        return
+
+    # Admin waiting states
+    if is_admin(user_id):
+        if context.user_data.get('waiting_cookie'):
+            context.user_data['waiting_cookie'] = False
+            success, result = bot_instance.save_cookie(text)
+            await update.message.reply_text(convert_to_premium(result), reply_markup=admin_keyboard())
+            return
+
+        if context.user_data.get('waiting_rate'):
+            context.user_data['waiting_rate'] = False
+            try:
+                new_rate = float(text)
+                bot_instance.config["mmk_exchange_rate"] = new_rate
+                save_config(bot_instance.config)
+                bot_instance.market_data = None
+                await update.message.reply_text(
+                    convert_to_premium(f"✅ Rate updated to {new_rate}"),
+                    reply_markup=admin_keyboard()
+                )
+            except:
+                await update.message.reply_text("❌ Invalid number", reply_markup=admin_keyboard())
+            return
+
+        if context.user_data.get('waiting_markup'):
+            context.user_data['waiting_markup'] = False
+            try:
+                m = float(text)
+                bot_instance.config["default_markup"] = m
+                save_config(bot_instance.config)
+                bot_instance.market_data = None
+                await update.message.reply_text(
+                    convert_to_premium(f"✅ Markup set to {m}x"),
+                    reply_markup=admin_keyboard()
+                )
+            except:
+                await update.message.reply_text("❌ Invalid", reply_markup=admin_keyboard())
+            return
+
+        if context.user_data.get('waiting_addcoin'):
+            context.user_data['waiting_addcoin'] = False
+            parts = text.split()
+            if len(parts) != 2:
+                await update.message.reply_text("❌ Format: USER_ID AMOUNT", reply_markup=admin_keyboard())
+                return
+            try:
+                target = int(parts[0])
+                amount = float(parts[1])
+                new_bal = bot_instance.add_user_balance(target, amount)
+                await update.message.reply_text(
+                    convert_to_premium(f"✅ User {target} ကို {amount:,.0f} MMK ထည့်ပြီး။\nလက်ကျန်: {new_bal:,.0f}"),
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=admin_keyboard()
+                )
+            except:
+                await update.message.reply_text("❌ Invalid", reply_markup=admin_keyboard())
+            return
+
+async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    await update.message.reply_text(
+        convert_to_premium("✅ Cancelled."),
+        reply_markup=main_menu_keyboard(is_admin(update.effective_user.id))
+    )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update.effective_user.id):
         return
-    
-    help_text = (
-        "<b>🤖 BOT COMMANDS</b>\n\n"
-        "<b>User Commands:</b>\n"
-        "/start - Start the bot\n"
-        "/status - Check account status\n"
-        "/market - View products & prices\n"
-        "/logs - View recent orders\n"
-        "/check [UID] [ZID] - Check user\n"
-        "/redeem [CODE] - Redeem code\n"
-        "/topup [UID] [ZID] [NO] [QTY] - Topup diamonds\n"
-        "/rate - Check exchange rate\n"
-        "/help - Show this help\n\n"
-        "<b>Admin Commands:</b>\n"
-        "/cookie [COOKIE] - Set cookie\n"
-        "/refresh - Refresh market data\n"
-        "/setrate [RATE] - Change exchange rate\n"
-        "/adduser [ID] - Add user\n"
-        "/removeuser [ID] - Remove user\n"
-        "/listusers - List allowed users\n\n"
-        f"📞 <b>Developer:</b> {bot_instance.config.get('developer_contact', '@Terry85855')}"
-    )
-    
-    await update.message.reply_text(convert_to_premium(help_text), parse_mode=ParseMode.HTML)
+    await start_command(update, context)
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"Update {update} caused error {context.error}")
-    
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"Update {update} caused error {context.error}")
-    
-    if update and update.effective_user:
-        if is_authorized(update.effective_user.id):
-            error_msg = escape_html(str(context.error))
-            await update.message.reply_text(convert_to_premium(f"❌ Error occurred: {error_msg}"),parse_mode=ParseMode.HTML)
-
+    print(f"Error: {context.error}")
 
 app_web = Flask(__name__)
 
 @app_web.route('/')
 def index():
-    return "Nora says Bot is running beautifully!"
+    return "Bot is running!"
 
 def run_server():
     port = int(os.environ.get('PORT', 8080))
@@ -921,53 +915,25 @@ def run_server():
 def keep_alive():
     t = Thread(target=run_server)
     t.start()
-# -----------------------------------------------
 
 def main():
     config = load_config()
-
-    
     print(f"{V}╔════════════════════════════════════════════╗")
-    print(f"{V}║{W}{B}   SMILE.ONE TELEGRAM BOT V3.7          {V}║")
-    print(f"{V}║{Y}{B}          MULTI-USER TOPUP SYSTEM         {V}║")
+    print(f"{V}║{W}{B}   SMILE.ONE BOT V3.9 - FULL WIDTH BTN  {V}║")
     print(f"{V}╚════════════════════════════════════════════╝{N}")
-    print(f"{C}[i] Exchange Rate: {config.get('mmk_exchange_rate', 75)} MMK/coin{N}")
-    print(f"{C}[i] Developer: {config.get('developer_contact', '@Terry85855')}{N}")
-    
-    if not os.path.exists(COOKIE_FILE):
-        print(f"{Y}[!] No cookie file found. Admin needs to set cookie.{N}")
-    
+
     app = Application.builder().token(BOT_TOKEN).build()
-    
+
     app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("status", status_command))
-    app.add_handler(CommandHandler("market", market_command))
-    app.add_handler(CommandHandler("logs", logs_command))
-    app.add_handler(CommandHandler("cookie", cookie_command))
-    app.add_handler(CommandHandler("check", check_command))
-    app.add_handler(CommandHandler("redeem", redeem_command))
-    app.add_handler(CommandHandler("topup", topup_command))
-    app.add_handler(CommandHandler("refresh", refresh_command))
-    app.add_handler(CommandHandler("rate", rate_command))
-    app.add_handler(CommandHandler("setrate", setrate_command))
-    app.add_handler(CommandHandler("adduser", adduser_command))
-    app.add_handler(CommandHandler("removeuser", removeuser_command))
-    app.add_handler(CommandHandler("listusers", listusers_command))
     app.add_handler(CommandHandler("help", help_command))
-    
+    app.add_handler(CommandHandler("cancel", cancel_command))
+    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.TEXT & \~filters.COMMAND, text_handler))
     app.add_error_handler(error_handler)
-    
-    print(f"{G}[+] Bot started successfully!{N}")
-    print(f"{C}[i] Admin ID: {config.get('admin_id')}{N}")
-        
-    
-    print(f"{C}[i] Listening for commands...{N}") #[span_4](start_span)[span_4](end_span)
-    print(f"{C}[i] Multi-user mode enabled{N}") #[span_5](start_span)[span_5](end_span)
-    
 
-    keep_alive() 
-    
-    app.run_polling(allowed_updates=Update.ALL_TYPES) #[span_6](start_span)[span_6](end_span)
+    print(f"{G}[+] Bot started with Full-Width Buttons + Coin System!{N}")
+    keep_alive()
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
-if __name__ == "__main__": #[span_7](start_span)[span_7](end_span)
-    main() #[span_8](start_span)[span_8](end_span)
+if __name__ == "__main__":
+    main()
