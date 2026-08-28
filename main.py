@@ -17,9 +17,9 @@ from threading import Thread
 
 
 
-ADMIN_ID = 8433047541  
+ADMIN_ID = 7308292609  
 BOT_TOKEN = "8707027344:AAFlHX4yY7-6fXXaeimh8DrmxldaJFbfknc"  # 
-DEVELOPER_CONTACT = "@Terry85855"  
+DEVELOPER_CONTACT = "@kiki20251"  
 # Premium Color Palette for Terminal (admin only)
 G = '\033[38;5;46m'    # Success Green
 R = '\033[38;5;196m'   # Critical Red
