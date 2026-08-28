@@ -19,7 +19,7 @@ from flask import Flask
 from threading import Thread
 
 ADMIN_ID = 7308292609
-BOT_TOKEN = "7572191890:AAGWDg9jjKqYux0J4Se4jTu1wiH5t7aJTgE"
+BOT_TOKEN = "8692690656:AAHrirr1guyIcmOmosT3-wJLa_7qAmPsgfM"
 DEVELOPER_CONTACT = "@kiki20251"
 
 # Colors
